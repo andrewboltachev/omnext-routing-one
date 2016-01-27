@@ -32,7 +32,7 @@
 (defn path-and-params-to-hash
   "Opposite for function from above. Expects keys of `params` to be keywords"
   ([path]
-   (path-and-params-to-hash nil)
+   (path-and-params-to-hash path nil)
    )
   ([path params]
     (apply str "#/" (string/join "/" path) "/"
@@ -61,6 +61,23 @@
            tabs))
   )
 
+(defn get-query-and-params-by-parsed-url [tabs parsed-url]
+  (if-let [component (some->>
+    (get-tab-by-parsed-url tabs parsed-url)
+    :component
+    )]
+      {:query (om/query component)
+       :params (let [component-params (om/params component)]
+                 (merge
+                   component-params
+                   (select-keys
+                     (:params parsed-url)
+                     (keys component-params)
+                     )))
+       }
+    )
+  )
+
 
 ;; Tab components
 
@@ -72,7 +89,7 @@
 
   static om/IQuery
   (query [_]
-         '[:countries {:page ?page}]
+         '[(:countries {:page ?page})]
          )
 
   Object
@@ -94,24 +111,18 @@
 
   static om/IQuery
   (query [_]
-         '[:oceans-tab]
+         '[:oceans]
          )
 
   Object
   (render [this]
           (apply dom/ul nil
-                 (map (fn [country]
+                 (map (fn [ocean]
                         (dom/li nil
-                                (:name country)
-                                (dom/span
-                                  #js {:style #js {:fontWeight "bold"
-                                                   :marginLeft "5px"}}
-                                  "("
-                                  (:code country)
-                                  ")"
-                                  )
+                                ocean
                                 )
                         )
+                      (:oceans (om/props this))
                       )
                  )
           )
@@ -121,16 +132,20 @@
   static om/IQueryParams
   (params [_]
           ; ...
+          {}
           )
 
   static om/IQuery
   (query [_]
-         '[:countries {:page ?page}]
+         '[:hello]
          )
 
   Object
   (render [this]
-          (apply dom/ul nil
+          (dom/div nil
+          "something"
+               )
+          #_(apply dom/ul nil
                  (map (fn [ocean]
                         (dom/li nil ocean)
                         )
@@ -144,17 +159,17 @@
 (def tabs
   [
    {:key :countries
-    :url ["countries"]
+    :url-path ["countries"]
     :title "Countries"
     :component CountriesTab
     }
    {:key :oceans
-    :url ["oceans"]
+    :url-path ["oceans"]
     :title "Oceans"
     :component OceansTab
     }
    {:key :hello
-    :url ["hello-world"]
+    :url-path ["hello-world"]
     :title "Just «Hello, World!» in it"
     :component HelloTab
     }
@@ -173,39 +188,47 @@
   (get-tab-by-parsed-url tabs initial-url)
   )
 
-(def initial-component
-  (:component initial-tab)
+(def initial-query-and-params
+  (get-query-and-params-by-parsed-url
+    tabs
+    initial-url)
   )
 
-(def initial-query-for-root
-  (when initial-component
-    (om/query initial-component)
-    )
+(def initial-query
+  (:query initial-query-and-params)
   )
 
-(def initial-params-for-root
-  (when initial-component
-    (om/params initial-component)
-    )
+(def initial-params
+  (:params initial-query-and-params)
   )
 
 ;; Components
 
 (defui RootView
-  static om/IQueryParams
-  (params [_]
-          initial-params-for-root ; here and below, we're passing (pre-computed) value
-                                  ; and not doing function calls
-    )
+  ;static om/IQueryParams
+  ;(params [_]
+  ;        initial-params ; here and below, we're passing (pre-computed) value
+  ;                       ; and not doing function calls
+  ;  )
 
   static om/IQuery
   (query [_]
-         initial-query-for-root
+         initial-query
     )
 
   Object
   (render [this]
-          (let []
+          (let [unbound-query (om/query this)
+                unbound-params (om/params this)
+                query (om/get-query this)
+                tab-is-active (fn [tab]
+                                (= unbound-query
+                                   (om/query
+                                     (:component tab)
+                                     )
+                                   )
+                                )
+                ]
             (dom/div #js {:className "container"}
                      ;; Tabs (navigation)
                         (apply dom/ul
@@ -214,16 +237,38 @@
                         (map (fn [tab]
                         (dom/li
                           #js
-                          {:className "active", :role "presentation"}
+                          {:className (when (tab-is-active tab)
+                                        "active"
+                                        ), :role "presentation"}
                           (dom/a
                           #js
                           {:shape "rect",
-                            :href "#home",
+                            :href (path-and-params-to-hash
+                                    (:url-path tab)
+                                    nil ; XXX: tabs not intended to have params yet
+                                    ),
                             :aria-controls "home",
                             :role "tab",
-                            :data-toggle "tab"}
+                            }
                           (:title tab))))
                              tabs))
+                     (dom/div nil
+                              ; ...
+                              (if-let [current-tab (first
+                                                     (filter tab-is-active tabs)
+                                                     )]
+                                ; ...
+                                (do
+                                  (println "current-tab" current-tab)
+                                  (
+                                    (om/factory
+                                      (:component current-tab))
+                                    (om/props this)
+                                   )
+                                  )
+
+                                )
+                       )
                     )
             )
           )
@@ -236,7 +281,7 @@
 (defmethod readf :default
   [{:keys [state] :as env} k params]
   (if-let [v (get @state k)]
-    {:value k}
+    {:value v}
     {:value nil}
     )
   )
@@ -260,8 +305,57 @@
                    }
                   ))
 
+
 (om/add-root!
   reconciler
   RootView
   (gdom/getElement "app"))
 
+
+
+
+;; Watch the URL changes
+(aset
+  js/window
+  "onhashchange"
+  (fn [_]
+    ; ...
+    (let [parsed-url (parse-url-hash
+          js/window.location.hash
+          )
+          x (get-query-and-params-by-parsed-url
+        tabs
+        parsed-url
+        )
+          
+          y (some->>
+    (get-tab-by-parsed-url tabs parsed-url)
+    :component
+    )
+          
+          the-query (with-meta
+           (om/get-query y)
+           nil)
+          _ (println "the-query" the-query)
+          ]
+      (println "set query to" x)
+      #_(om/set-query!
+        reconciler
+        ;(select-keys x [:query])
+
+        )
+      (om/set-query!
+        reconciler
+        {:query
+         the-query
+         }
+        )
+
+      (println
+        "..."
+        (om/get-query
+          reconciler)
+        )
+      )
+    )
+  )
