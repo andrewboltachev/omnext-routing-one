@@ -31,11 +31,7 @@
 
 ;; Root
 
-(def data {
-           :countries (js->clj js/COUNTRIES_LIST :keywordize-keys true)
-           :oceans ["Pacific" "Atlantic" "Indian" "Southern" "Arctic"]
-           :hello "Hello, world! What's up?"
-           })
+(def data nil)
 
 (def parser (om/parser {:read readf
                         :mutate mutatef}))
