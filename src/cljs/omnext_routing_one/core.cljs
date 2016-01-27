@@ -1,13 +1,16 @@
 (ns omnext-routing-one.core
   (:require [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
-            [om.dom :as dom]))
+            [om.dom :as dom]
+            [clojure.string :as string]
+            ))
 
 (enable-console-print!)
 
 ;; URL helper functions
 
 (defn parse-url-hash [h]
+  "#/foo/bar/?a=b&c=d -> {:path [\"foo\" \"bar\"], :params {:a \"b\", :c \"d\"}}"
   (let [
       h (subs h 2)
       [path params] (string/split h #"\u003f")
@@ -21,9 +24,41 @@
                                  ])
                     #(string/split % "=")) (string/split params "&")))
       ]
-  {:path path
-   :params params}
+    {:path path
+     :params params}
+    )
   )
+
+(defn path-and-params-to-hash
+  "Opposite for function from above. Expects keys of `params` to be keywords"
+  ([path]
+   (path-and-params-to-hash nil)
+   )
+  ([path params]
+    (apply str "#/" (string/join "/" path) "/"
+         (when params
+           (cons
+             "?"
+            (string/join "&" (map (fn [[k v]]
+                                    (str
+                                      (-> k name js/encodeURIComponent)
+                                      "="
+                                      (-> v js/encodeURIComponent)
+                                      )
+                                    ) params))
+            )
+           )
+         )
+   )
+  )
+
+;; Tab functions
+
+(defn get-tab-by-parsed-url [tabs {:keys [path params]}]
+  "Tabs format is defined in `tabs` below. See `parse-url-hash` for second param"
+  (first (filter
+           #(= (:url-path %) path)
+           tabs))
   )
 
 
@@ -32,7 +67,7 @@
 (defui CountriesTab
   static om/IQueryParams
   (params [_]
-          ; ...
+          {:page 1}
           )
 
   static om/IQuery
@@ -66,7 +101,16 @@
   (render [this]
           (apply dom/ul nil
                  (map (fn [country]
-                        (dom/li nil country)
+                        (dom/li nil
+                                (:name country)
+                                (dom/span
+                                  #js {:style #js {:fontWeight "bold"
+                                                   :marginLeft "5px"}}
+                                  "("
+                                  (:code country)
+                                  ")"
+                                  )
+                                )
                         )
                       )
                  )
@@ -87,8 +131,8 @@
   Object
   (render [this]
           (apply dom/ul nil
-                 (map (fn [country]
-                        (dom/li nil country)
+                 (map (fn [ocean]
+                        (dom/li nil ocean)
                         )
                       )
                  )
@@ -120,26 +164,68 @@
 ;; Processing the initial URL
 
 (def initial-url
-  js/window.location.hash)
+  (parse-url-hash
+    js/window.location.hash
+    )
+  )
 
-(
+(def initial-tab
+  (get-tab-by-parsed-url tabs initial-url)
+  )
+
+(def initial-component
+  (:component initial-tab)
+  )
+
+(def initial-query-for-root
+  (when initial-component
+    (om/query initial-component)
+    )
+  )
+
+(def initial-params-for-root
+  (when initial-component
+    (om/params initial-component)
+    )
+  )
 
 ;; Components
 
 (defui RootView
   static om/IQueryParams
   (params [_]
+          initial-params-for-root ; here and below, we're passing (pre-computed) value
+                                  ; and not doing function calls
     )
 
   static om/IQuery
   (query [_]
+         initial-query-for-root
     )
 
   Object
   (render [this]
-    (dom/div #js {:className "container"}
-             "Hello, world!"
-             )
+          (let []
+            (dom/div #js {:className "container"}
+                     ;; Tabs (navigation)
+                        (apply dom/ul
+                        #js
+                        {:className "nav nav-tabs", :role "tablist"}
+                        (map (fn [tab]
+                        (dom/li
+                          #js
+                          {:className "active", :role "presentation"}
+                          (dom/a
+                          #js
+                          {:shape "rect",
+                            :href "#home",
+                            :aria-controls "home",
+                            :role "tab",
+                            :data-toggle "tab"}
+                          (:title tab))))
+                             tabs))
+                    )
+            )
           )
   )
 
@@ -149,6 +235,10 @@
 
 (defmethod readf :default
   [{:keys [state] :as env} k params]
+  (if-let [v (get @state k)]
+    {:value k}
+    {:value nil}
+    )
   )
 
 (defmulti mutatef om/dispatch)
