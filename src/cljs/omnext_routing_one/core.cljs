@@ -96,8 +96,9 @@
   (render [this]
           (apply dom/ul nil
                  (map (fn [country]
-                        (dom/li nil country)
+                        (dom/li nil (:name country))
                         )
+                      (:countries (om/props this))
                       )
                  )
           )
@@ -205,15 +206,23 @@
 ;; Components
 
 (defui RootView
-  ;static om/IQueryParams
-  ;(params [_]
-  ;        initial-params ; here and below, we're passing (pre-computed) value
-  ;                       ; and not doing function calls
-  ;  )
+  static om/IQueryParams
+  (params [_]
+          ;initial-params ; here and below, we're passing (pre-computed) value
+          ;               ; and not doing function calls
+          (merge {}
+         (:params (get-query-and-params-by-parsed-url tabs (parse-url-hash
+                                               js/window.location.hash
+                                               )))
+                 )
+    )
 
   static om/IQuery
   (query [_]
-         initial-query
+         ;initial-query
+         (with-meta (:query (get-query-and-params-by-parsed-url tabs (parse-url-hash
+                                               js/window.location.hash
+                                               ))) nil)
     )
 
   Object
@@ -355,6 +364,7 @@
         "..."
         (om/get-query
           reconciler)
+        (om/query RootView)
         )
       )
     )
