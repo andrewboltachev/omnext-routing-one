@@ -1,0 +1,7 @@
+resources/public/bower_components/
+target/
+bin/
+.lein-repl-history
+.nrepl-port
+resources/public/js
+figwheel_server.log
