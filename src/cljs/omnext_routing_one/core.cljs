@@ -120,7 +120,7 @@
 
 
 
-(println (om/props this))
+(prn (om/props this))
 (when (> (:pages (:countries (om/props this))) 1)
   (apply dom/ul
    #js
@@ -369,7 +369,7 @@
   (println "readf" k params)
   (if-let [v (get @state k)]
     {:value
-     {:page (:page params)
+     {:page (or (cljs.reader/parse-int (:page params)) 1)
       :pages (.ceil js/Math
                     (/ (count v)
                        items-per-page
