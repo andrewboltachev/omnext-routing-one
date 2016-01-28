@@ -93,7 +93,8 @@
 
   static om/IQuery
   (query [_]
-         '[:tab-key/countries
+         '[:tab-key/countries ; XXX: this is crazy hack, which allows
+                              ; to determine active tab by it's query
            (:countries {:page ?page})]
          )
 
