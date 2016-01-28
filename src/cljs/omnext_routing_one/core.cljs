@@ -11,6 +11,10 @@
 
 (enable-console-print!)
 
+
+;; Constants
+(def items-per-page 5)
+
 ;; URL helper functions
 
 (defn parse-url-hash [h]
@@ -100,13 +104,58 @@
 
   Object
   (render [this]
-          (apply dom/ul nil
-                 (map (fn [country]
-                        (dom/li nil (:name country))
+          (dom/div nil
+                     
+            (apply dom/ul nil
+                   (map (fn [country]
+                          (dom/li nil (:name country))
+                          )
+                        (:items (:countries (om/props this)))
                         )
-                      (:countries (om/props this))
-                      )
-                 )
+                   )
+
+
+
+
+
+
+
+(println (om/props this))
+(when (> (:pages (:countries (om/props this))) 1)
+  (apply dom/ul
+   #js
+   {:className "pagination"}
+         (map
+    (fn [i]
+   (dom/li #js {
+                
+                           :className (when
+(= (:page (:countries (om/props this))) i) "active"
+                                        )
+                } (dom/a #js {:shape "rect", :href (path-and-params-to-hash ["countries"] {:page i})
+
+                           }
+                      
+                      (str i)
+                      )))
+    (map inc (range (:pages (:countries (om/props this)))))
+      )
+    ))
+
+
+
+
+
+
+
+
+
+)
+
+
+
+
+
           )
   )
 
@@ -311,6 +360,31 @@
   (println "readf" k params)
   (if-let [v (get @state k)]
     {:value v}
+    {:value nil}
+    )
+  )
+
+(defmethod readf :countries
+  [{:keys [state] :as env} k {:keys [page] :as params}]
+  (println "readf" k params)
+  (if-let [v (get @state k)]
+    {:value
+     {:page (:page params)
+      :pages (.ceil js/Math
+                    (/ (count v)
+                       items-per-page
+                       )
+                    )
+      :items (subvec v
+                     (* items-per-page (dec page))
+                     (min
+                       (+
+                        (* items-per-page (dec page))
+                        items-per-page)
+                       (count v))
+                     )
+      }
+     }
     {:value nil}
     )
   )
