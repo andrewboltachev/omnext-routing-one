@@ -93,7 +93,8 @@
 
   static om/IQuery
   (query [_]
-         '[(:countries {:page ?page})]
+         '[:tab-key/countries
+           (:countries {:page ?page})]
          )
 
   Object
@@ -116,7 +117,8 @@
 
   static om/IQuery
   (query [_]
-         '[:oceans]
+         '[:tab-key/oceans
+           :oceans]
          )
 
   Object
@@ -142,7 +144,8 @@
 
   static om/IQuery
   (query [_]
-         '[:hello]
+         '[:tab-key/hello
+           :hello]
          )
 
   Object
@@ -212,46 +215,45 @@
 (defui RootView
   static om/IQueryParams
   (params [_]
-          ;initial-params ; here and below, we're passing (pre-computed) value
-          ;               ; and not doing function calls
-          (merge {}
-         (:params (get-query-and-params-by-parsed-url tabs (parse-url-hash
-                                               js/window.location.hash
-                                               )))
-                 )
+          initial-params ; here and below, we're passing (pre-computed) value
+                         ; and not doing function calls
     )
 
   static om/IQuery
   (query [_]
-         ;initial-query
-         (with-meta (:query (get-query-and-params-by-parsed-url tabs (parse-url-hash
-                                               js/window.location.hash
-                                               ))) nil)
+         initial-query
     )
 
   Object
   (componentDidMount [this]
                      (go-loop [new-query (<! routes-chan)]
-                                             (println "new query"
-                                                      new-query)
                                 (om/set-query!
                                   this
                                   new-query
                                   )
-
                               (recur (<! routes-chan))
                        )
                      )
 
   (render [this]
-          (let [unbound-query (om/query this)
-                unbound-params (om/params this)
+          (println "render called. and"
+                       (meta (first (-> this om/get-query)))
+                       (-> this om/get-query)
+                   (om/query this)
+                   (om/params this)
+                   )
+          (let [;unbound-query (om/query this)
+                ;unbound-params (om/params this)
                 query (om/get-query this)
                 tab-is-active (fn [tab]
-                                (= unbound-query
-                                   (om/query
-                                     (:component tab)
-                                     )
+                                (contains?
+                                  (into #{} (comp
+                                              (filter keyword?)
+                                              (filter #(= (namespace %) "tab-key"))
+                                              (map name)
+                                              (map keyword)
+                                             ) query)
+                                   (:key tab)
                                    )
                                 )
                 ]
@@ -285,7 +287,6 @@
                                                      )]
                                 ; ...
                                 (do
-                                  (println "current-tab" current-tab)
                                   (
                                     (om/factory
                                       (:component current-tab))
@@ -306,6 +307,7 @@
 
 (defmethod readf :default
   [{:keys [state] :as env} k params]
+  (println "readf" k params)
   (if-let [v (get @state k)]
     {:value v}
     {:value nil}
