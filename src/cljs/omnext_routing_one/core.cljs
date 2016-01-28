@@ -367,9 +367,10 @@
 (defmethod readf :countries
   [{:keys [state] :as env} k {:keys [page] :as params}]
   (println "readf" k params)
+  (let [page (or (cljs.reader/parse-int (:page params)) 1)]
   (if-let [v (get @state k)]
     {:value
-     {:page (or (cljs.reader/parse-int (:page params)) 1)
+     {:page page
       :pages (.ceil js/Math
                     (/ (count v)
                        items-per-page
@@ -386,7 +387,7 @@
       }
      }
     {:value nil}
-    )
+    ))
   )
 
 (defmulti mutatef om/dispatch)
