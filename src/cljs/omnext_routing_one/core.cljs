@@ -150,12 +150,9 @@
           (dom/div nil
           "something"
                )
-          #_(apply dom/ul nil
-                 (map (fn [ocean]
-                        (dom/li nil ocean)
-                        )
-                      )
-                 )
+          (dom/h1 nil
+                  (:hello (om/props this))
+                  )
           )
   )
 
