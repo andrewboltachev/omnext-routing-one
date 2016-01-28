@@ -1,8 +1,12 @@
 (ns omnext-routing-one.core
+  (:require-macros
+    [cljs.core.async.macros :refer (go-loop)]
+    )
   (:require [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
             [om.dom :as dom]
             [clojure.string :as string]
+            [cljs.core.async :refer (<! put! chan)]
             ))
 
 (enable-console-print!)
@@ -205,6 +209,9 @@
 
 ;; Components
 
+
+(def routes-chan (chan))
+
 (defui RootView
   static om/IQueryParams
   (params [_]
@@ -226,6 +233,19 @@
     )
 
   Object
+  (componentDidMount [this]
+                     (go-loop [new-query (<! routes-chan)]
+                                             (println "new query"
+                                                      new-query)
+                                (om/set-query!
+                                  this
+                                  new-query
+                                  )
+
+                              (recur (<! routes-chan))
+                       )
+                     )
+
   (render [this]
           (let [unbound-query (om/query this)
                 unbound-params (om/params this)
@@ -332,40 +352,12 @@
     (let [parsed-url (parse-url-hash
           js/window.location.hash
           )
-          x (get-query-and-params-by-parsed-url
+          new-query (get-query-and-params-by-parsed-url
         tabs
         parsed-url
         )
-          
-          y (some->>
-    (get-tab-by-parsed-url tabs parsed-url)
-    :component
-    )
-          
-          the-query (with-meta
-           (om/get-query y)
-           nil)
-          _ (println "the-query" the-query)
           ]
-      (println "set query to" x)
-      #_(om/set-query!
-        reconciler
-        ;(select-keys x [:query])
-
-        )
-      (om/set-query!
-        reconciler
-        {:query
-         the-query
-         }
-        )
-
-      (println
-        "..."
-        (om/get-query
-          reconciler)
-        (om/query RootView)
-        )
+      (put! routes-chan new-query)
       )
     )
   )
