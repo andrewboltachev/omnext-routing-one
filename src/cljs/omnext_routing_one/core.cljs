@@ -168,7 +168,8 @@
   static om/IQuery
   (query [_]
          '[:tab-key/oceans
-           :oceans]
+           :oceans
+           :selected-ocean]
          )
 
   Object
@@ -176,7 +177,12 @@
           (apply dom/ul nil
                  (map (fn [ocean]
                         (dom/li nil
+                                ((if (= (:selected-ocean (om/props this))
+                                       ocean
+                                       )
+                                   dom/strong dom/span) nil
                                 ocean
+                                  )
                                 )
                         )
                       (:oceans (om/props this))
@@ -260,18 +266,32 @@
 ;; Components
 
 
+(def root-own-params
+  {}
+  )
+
+(def root-own-query
+  '[:oceans
+    :selected-ocean]
+  )
+
 (def routes-chan (chan))
 
 (defui RootView
   static om/IQueryParams
   (params [_]
-          initial-params ; here and below, we're passing (pre-computed) value
-                         ; and not doing function calls
+          (merge
+            initial-params
+            root-own-params
+            )
     )
 
   static om/IQuery
   (query [_]
-         initial-query
+         (vec (concat
+           initial-query
+           root-own-query
+           ))
     )
 
   Object
@@ -279,7 +299,11 @@
                      (go-loop [new-query (<! routes-chan)]
                                 (om/set-query!
                                   this
-                                  new-query
+                                  {:query
+                                   (-> new-query :query (concat root-own-query) vec)
+                                   :params
+                                   (-> new-query :params (merge root-own-params)) ;; TODO: this weren't checked
+                                   }
                                   )
                               (recur (<! routes-chan))
                        )
@@ -308,6 +332,20 @@
                                 )
                 ]
             (dom/div #js {:className "container"}
+                     ;; The custom component
+                     (dom/div nil
+                         "Selected ocean:"
+                         (:selected-ocean (om/props this))
+                         (dom/button #js {:className "btn btn-default"
+                                          :onClick (fn [e]
+                                                     (om/transact! this `[(~'select-random-ocean
+                                                                           {:current-oceans
+                                                                            ~(:oceans (om/props this))
+                                                                            }
+                                                                           )])
+                                                     )
+                                          } "Select random ocean")
+                              )
                      ;; Tabs (navigation)
                         (apply dom/ul
                         #js
@@ -392,10 +430,22 @@
 
 (defmulti mutatef om/dispatch)
 
+
+(defmethod mutatef 'select-random-ocean
+  [{:keys [state] :as env} k {:keys [current-oceans] :as params}]
+  {:action
+   (fn []
+     (swap! state #(assoc % :selected-ocean
+             (rand-nth (vec current-oceans))
+             ))
+     )}
+  )
+
 ;; Root
 
 (def data {
            :countries (js->clj js/COUNTRIES_LIST :keywordize-keys true)
+           :selected-ocean nil
            :oceans ["Pacific" "Atlantic" "Indian" "Southern" "Arctic"]
            :hello "Hello, world! What's up?"
            })
